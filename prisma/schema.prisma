@@ -1,0 +1,108 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+model User {
+  id            Int       @id @default(autoincrement())
+  walletAddress String    @unique
+  chainType     ChainType
+  nonce         String?
+  domain        String?
+  issuedAt      DateTime?
+  lastSignature String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  receipts     Receipt[]
+  balances     TokenBalance[]
+  transactions BalanceTransaction[]
+}
+
+model Receipt {
+  id                String             @id @default(uuid())
+  user              User               @relation(fields: [userWalletAddress], references: [walletAddress])
+  userWalletAddress String
+  transactionId     String             @unique
+  transaction       BalanceTransaction @relation(fields: [transactionId], references: [id])
+  chainType         ChainType
+  status            ReceiptStatus      @default(PENDING)
+  fileLocation      String?
+  arweaveTxId       String?
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  network           Network
+  token             Token
+  cost              Decimal
+  costUSD           Decimal
+}
+
+model TokenBalance {
+  id        String    @id @default(uuid())
+  name      String
+  ticker    String
+  decimals  Int
+  chainType ChainType
+  network   Network
+  balance   Decimal   @default(0.0)
+
+  userWalletAddress String
+  user              User   @relation(fields: [userWalletAddress], references: [walletAddress])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userWalletAddress, chainType, network])
+}
+
+model BalanceTransaction {
+  id                String @id @default(uuid())
+  userWalletAddress String
+  user              User   @relation(fields: [userWalletAddress], references: [walletAddress])
+
+  chainType       ChainType
+  network         Network
+  token           Token
+  amount          Decimal
+  status          TransactionStatus @default(PENDING)
+  transactionHash String?
+  receipt         Receipt?
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+}
+
+enum TransactionStatus {
+  PENDING
+  SUCCEEDED
+  FAILED
+}
+
+enum Token {
+  USDC
+  USDT
+  ETH
+  SOL
+  AR
+}
+
+enum ReceiptStatus {
+  PENDING
+  PAID
+  COMPLETED
+  FAILED
+}
+
+enum ChainType {
+  evm
+  solana
+  arweave
+}
+
+enum Network {
+  mainnet
+  testnet
+}
