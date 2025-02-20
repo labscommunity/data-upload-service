@@ -2,11 +2,13 @@ import { Global, Module } from '@nestjs/common';
 import { RequestMethod } from '@nestjs/common/enums';
 import { MiddlewareConsumer, NestModule } from '@nestjs/common/interfaces';
 import { ConfigModule, ConfigService } from '@nestjs/config';
-import { APP_INTERCEPTOR } from '@nestjs/core';
+import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { JwtModule } from '@nestjs/jwt';
 
 import config from '../config';
 import { DatabaseModule } from '../database/database.module';
+import { AccessTokenGuard } from './auth/guards/access-token/access-token.guard';
+import { AuthenticationGuard } from './auth/guards/authentication/authentication.guard';
 import { TransformResponseInterceptor } from './interceptors/transform-response/transform-response.interceptor';
 import { LoggerService } from './logger/logger.service';
 import { LoggerMiddleware } from './middleware/logger.middleware';
@@ -37,9 +39,14 @@ import { QueueModule } from './queue/queue.module';
       provide: APP_INTERCEPTOR,
       useClass: TransformResponseInterceptor,
     },
+    {
+      provide: APP_GUARD,
+      useClass: AuthenticationGuard,
+    },
+    AccessTokenGuard,
     LoggerService,
   ],
-  exports: [LoggerService],
+  exports: [LoggerService, JwtModule],
 })
 export class CoreModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {

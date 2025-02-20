@@ -3,8 +3,8 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
-  url      = "file:./dev.db"
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
 }
 
 model User {
@@ -69,7 +69,7 @@ model BalanceTransaction {
   token           Token
   amount          Decimal
   status          TransactionStatus @default(PENDING)
-  transactionHash String?
+  transactionHash String? @unique
   receipt         Receipt?
   createdAt       DateTime          @default(now())
   updatedAt       DateTime          @updatedAt

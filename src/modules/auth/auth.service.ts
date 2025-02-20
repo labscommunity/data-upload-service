@@ -12,7 +12,6 @@ import { VerifyAuthDto } from './dto/verify-auth.dto';
 
 @Injectable()
 export class AuthService {
-  private arweave: Arweave;
   private VERIFY_MAP = {
     [ChainType.evm]: this.verifyEvmSignature,
     [ChainType.solana]: this.verifySolanaSignature,
@@ -23,11 +22,17 @@ export class AuthService {
     private readonly userService: UserService,
     private readonly jwtService: JwtService
   ) {
-    this.arweave = Arweave.init({
-      host: 'arweave.net',
-      port: 443,
-      protocol: 'https',
-    });
+
+    // Bind verification methods to preserve 'this' context
+    this.verifyEvmSignature = this.verifyEvmSignature.bind(this);
+    this.verifySolanaSignature = this.verifySolanaSignature.bind(this);
+    this.verifyArweaveSignature = this.verifyArweaveSignature.bind(this);
+
+    this.VERIFY_MAP = {
+      [ChainType.evm]: this.verifyEvmSignature,
+      [ChainType.solana]: this.verifySolanaSignature,
+      [ChainType.arweave]: this.verifyArweaveSignature,
+    };
   }
 
   async generateNonce(user: User): Promise<string> {
@@ -64,6 +69,7 @@ export class AuthService {
   }
 
   async verifyRefreshToken(refreshToken: string): Promise<User> {
+    console.log('refreshToken', refreshToken);
     const token = await this.jwtService.verifyAsync(refreshToken);
     if (!token) {
       throw new UnauthorizedException('Invalid refresh token');
@@ -85,7 +91,7 @@ export class AuthService {
 
   async toArweaveAddress(publicKey: string): Promise<string> {
     try {
-      const address = this.arweave.wallets.jwkToAddress({
+      const address = this.getArweave().wallets.jwkToAddress({
         kty: 'RSA',
         e: 'AQAB',
         n: publicKey,
@@ -106,13 +112,14 @@ export class AuthService {
 
     // 2) Compare to the stored address (case-insensitive check)
     if (recoveredAddr.toLowerCase() !== user.walletAddress.toLowerCase()) {
-      throw new Error('Invalid EVM signature: recovered address mismatch');
+      throw new BadRequestException('Invalid EVM signature: recovered address mismatch');
     }
 
     // 3) Check that the message includes the correct nonce
     const nonce = this.extractNonce(signedMessage);
+
     if (!nonce || nonce !== user.nonce) {
-      throw new Error('Invalid EVM signature: nonce missing or mismatch');
+      throw new BadRequestException('Invalid EVM signature: nonce missing or mismatch');
     }
   }
 
@@ -127,8 +134,9 @@ export class AuthService {
 
     // 3) Check that the message includes the correct nonce
     const nonce = this.extractNonce(signedMessage);
+
     if (!nonce || nonce !== user.nonce) {
-      throw new Error('Invalid Solana signature: nonce missing or mismatch');
+      throw new BadRequestException('Invalid Solana signature: nonce missing or mismatch');
     }
 
     // 4) Verify with nacl
@@ -136,7 +144,7 @@ export class AuthService {
     const verified = nacl.sign.detached.verify(messageUint8, signatureUint8, pubKey.toBytes());
 
     if (!verified) {
-      throw new Error('Invalid Solana signature: verification failed');
+      throw new BadRequestException('Invalid Solana signature: verification failed');
     }
   }
 
@@ -150,13 +158,13 @@ export class AuthService {
 
     const nonce = this.extractNonce(signedMessage);
     if (!nonce || nonce !== user.nonce) {
-      throw new Error('Invalid Arweave signature: nonce missing or mismatch');
+      throw new BadRequestException('Invalid Arweave signature: nonce missing or mismatch');
     }
 
-    const verified = this.arweave.crypto.verify(publicKey, Uint8Array.from(Buffer.from(signedMessage)), Uint8Array.from(Buffer.from(signature)));
+    const verified = this.getArweave().crypto.verify(publicKey, Uint8Array.from(Buffer.from(signedMessage)), Uint8Array.from(Buffer.from(signature)));
 
     if (!verified) {
-      throw new Error('Invalid Arweave signature: verification failed');
+      throw new BadRequestException('Invalid Arweave signature: verification failed');
     }
   }
 
@@ -176,5 +184,13 @@ export class AuthService {
     const match = signedMessage.match(regex);
 
     return match ? match[1].trim() : null;
+  }
+
+  private getArweave() {
+    return Arweave.init({
+      host: 'arweave.net',
+      port: 443,
+      protocol: 'https',
+    });
   }
 }
