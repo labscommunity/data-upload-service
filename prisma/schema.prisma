@@ -11,6 +11,8 @@ model User {
   id            Int       @id @default(autoincrement())
   walletAddress String    @unique
   chainType     ChainType
+  chainId       Int
+  role          Role      @default(User)
   nonce         String?
   domain        String?
   issuedAt      DateTime?
@@ -29,26 +31,22 @@ model Receipt {
   userWalletAddress String
   transactionId     String             @unique
   transaction       BalanceTransaction @relation(fields: [transactionId], references: [id])
-  chainType         ChainType
   status            ReceiptStatus      @default(PENDING)
   fileLocation      String?
   arweaveTxId       String?
   createdAt         DateTime           @default(now())
   updatedAt         DateTime           @updatedAt
-  network           Network
-  token             Token
+  tokenId           String
+  token             Token              @relation(fields: [tokenId], references: [id])
   cost              Decimal
   costUSD           Decimal
 }
 
 model TokenBalance {
-  id        String    @id @default(uuid())
-  name      String
-  ticker    String
-  decimals  Int
-  chainType ChainType
-  network   Network
-  balance   Decimal   @default(0.0)
+  id      String  @id @default(uuid())
+  tokenId String
+  token   Token   @relation(fields: [tokenId], references: [id])
+  balance Decimal @default(0.0)
 
   userWalletAddress String
   user              User   @relation(fields: [userWalletAddress], references: [walletAddress])
@@ -56,7 +54,22 @@ model TokenBalance {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@unique([userWalletAddress, chainType, network])
+  @@unique([userWalletAddress, tokenId])
+}
+
+model Token {
+  id            String               @id @default(uuid())
+  name          String
+  ticker        TokenTicker
+  decimals      Int
+  chainType     ChainType
+  chainId       Int
+  network       Network
+  receipts      Receipt[]
+  transactions  BalanceTransaction[]
+  createdAt     DateTime             @default(now())
+  updatedAt     DateTime             @updatedAt
+  tokenBalances TokenBalance[]
 }
 
 model BalanceTransaction {
@@ -64,12 +77,11 @@ model BalanceTransaction {
   userWalletAddress String
   user              User   @relation(fields: [userWalletAddress], references: [walletAddress])
 
-  chainType       ChainType
-  network         Network
-  token           Token
+  tokenId         String
+  token           Token             @relation(fields: [tokenId], references: [id])
   amount          Decimal
   status          TransactionStatus @default(PENDING)
-  transactionHash String? @unique
+  transactionHash String?           @unique
   receipt         Receipt?
   createdAt       DateTime          @default(now())
   updatedAt       DateTime          @updatedAt
@@ -81,12 +93,17 @@ enum TransactionStatus {
   FAILED
 }
 
-enum Token {
+enum TokenTicker {
   USDC
   USDT
   ETH
   SOL
   AR
+}
+
+enum Role {
+  User
+  Admin
 }
 
 enum ReceiptStatus {

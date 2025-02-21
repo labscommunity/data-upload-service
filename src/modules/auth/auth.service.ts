@@ -57,7 +57,7 @@ export class AuthService {
   }
 
   async issueTokens(user: User): Promise<{ accessToken: string, refreshToken: string }> {
-    const payload = { walletAddress: user.walletAddress, id: user.id, chainType: user.chainType };
+    const payload = { walletAddress: user.walletAddress, id: user.id, chainType: user.chainType, role: user.role, chainId: user.chainId };
 
     const [accessToken, refreshToken] = await Promise.all([
       this.signToken(user.id, 3600 * 15, payload),

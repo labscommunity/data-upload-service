@@ -9,6 +9,7 @@ import config from '../config';
 import { DatabaseModule } from '../database/database.module';
 import { AccessTokenGuard } from './auth/guards/access-token/access-token.guard';
 import { AuthenticationGuard } from './auth/guards/authentication/authentication.guard';
+import { RolesGuard } from './auth/guards/authorization/roles.guard';
 import { TransformResponseInterceptor } from './interceptors/transform-response/transform-response.interceptor';
 import { LoggerService } from './logger/logger.service';
 import { LoggerMiddleware } from './middleware/logger.middleware';
@@ -42,6 +43,10 @@ import { QueueModule } from './queue/queue.module';
     {
       provide: APP_GUARD,
       useClass: AuthenticationGuard,
+    },
+    {
+      provide: APP_GUARD,
+      useClass: RolesGuard,
     },
     AccessTokenGuard,
     LoggerService,

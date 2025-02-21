@@ -1,35 +1,16 @@
 import { Body, Controller, Delete, Get, Param, Patch, Post } from '@nestjs/common';
+import { Auth } from 'src/core/auth/decorators/auth.decorator';
+import { AuthType } from 'src/core/auth/enums/auth-type.enum';
 
-import { CreateUploadDto } from './dto/create-upload.dto';
-import { UpdateUploadDto } from './dto/update-upload.dto';
+import { EstimatesDto } from './dto/estimates.dto';
 import { UploadService } from './upload.service';
-
+@Auth(AuthType.Bearer)
 @Controller('upload')
 export class UploadController {
   constructor(private readonly uploadService: UploadService) { }
 
-  @Post()
-  create(@Body() createUploadDto: CreateUploadDto) {
-    return this.uploadService.create(createUploadDto);
-  }
-
-  @Get()
-  findAll() {
-    return this.uploadService.findAll();
-  }
-
-  @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.uploadService.findOne(+id);
-  }
-
-  @Patch(':id')
-  update(@Param('id') id: string, @Body() updateUploadDto: UpdateUploadDto) {
-    return this.uploadService.update(+id, updateUploadDto);
-  }
-
-  @Delete(':id')
-  remove(@Param('id') id: string) {
-    return this.uploadService.remove(+id);
+  @Post('cost')
+  getEstimate(@Body() body: EstimatesDto) {
+    return body;
   }
 }
