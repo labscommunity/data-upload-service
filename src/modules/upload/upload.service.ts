@@ -24,4 +24,8 @@ export class UploadService {
   remove(id: number) {
     return `This action removes a #${id} upload`;
   }
+
+  private getEstimate(size: number) {
+    return size * 1000;
+  }
 }

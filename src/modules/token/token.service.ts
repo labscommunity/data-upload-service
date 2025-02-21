@@ -11,22 +11,31 @@ export class TokenService {
   ) { }
 
   create(createTokenDto: CreateTokenDto) {
-    return 'This action adds a new token';
+    return this.databaseService.token.create({
+      data: createTokenDto,
+    });
   }
 
   findAll() {
-    return `This action returns all token`;
+    return this.databaseService.token.findMany();
   }
 
-  findOne(id: number) {
-    return `This action returns a #${id} token`;
+  findOne(id: string) {
+    return this.databaseService.token.findUnique({
+      where: { id },
+    });
   }
 
-  update(id: number, updateTokenDto: UpdateTokenDto) {
-    return `This action updates a #${id} token`;
+  update(id: string, updateTokenDto: UpdateTokenDto) {
+    return this.databaseService.token.update({
+      where: { id },
+      data: updateTokenDto,
+    });
   }
 
-  remove(id: number) {
-    return `This action removes a #${id} token`;
+  remove(id: string) {
+    return this.databaseService.token.delete({
+      where: { id },
+    });
   }
 }
