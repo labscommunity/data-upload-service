@@ -11,6 +11,6 @@ export class UploadController {
 
   @Post('cost')
   getEstimate(@Body() body: EstimatesDto) {
-    return body;
+    return this.uploadService.getCostEstimate(body);
   }
 }

@@ -1,10 +1,16 @@
 import { Injectable } from '@nestjs/common';
 
+import { PriceFeedService } from '../token/price-feed.service';
 import { CreateUploadDto } from './dto/create-upload.dto';
+import { EstimatesDto } from './dto/estimates.dto';
 import { UpdateUploadDto } from './dto/update-upload.dto';
 
 @Injectable()
 export class UploadService {
+  constructor(
+    private readonly priceFeedService: PriceFeedService,
+  ) { }
+
   create(createUploadDto: CreateUploadDto) {
     return 'This action adds a new upload';
   }
@@ -25,7 +31,15 @@ export class UploadService {
     return `This action removes a #${id} upload`;
   }
 
-  private getEstimate(size: number) {
-    return size * 1000;
+  async getCostEstimate(estimatesDto: EstimatesDto) {
+    const costInUSD = await this.priceFeedService.getUploadCostEstimateInUSD(estimatesDto.size);
+    const costInToken = await this.priceFeedService.convertToTokenAmount(costInUSD, estimatesDto.tokenTicker);
+
+    const ticker = estimatesDto.tokenTicker.toLowerCase();
+    return {
+      size: estimatesDto.size,
+      usd: costInUSD,
+      [ticker]: costInToken,
+    };
   }
 }
