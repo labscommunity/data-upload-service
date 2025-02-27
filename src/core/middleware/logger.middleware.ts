@@ -30,6 +30,7 @@ export class LoggerMiddleware implements NestMiddleware {
         headers,
         query,
         body,
+        statusMessage: res.statusMessage,
       };
 
       if (statusCode >= 500) {
