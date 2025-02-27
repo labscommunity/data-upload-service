@@ -2,6 +2,7 @@ import { CanActivate, ExecutionContext, Injectable, UnauthorizedException } from
 import { JwtService } from '@nestjs/jwt';
 import { Request } from 'express';
 import { REQUEST_USER_KEY } from 'src/modules/auth/auth.constants';
+import { User } from 'src/modules/auth/user.types';
 
 @Injectable()
 export class AccessTokenGuard implements CanActivate {
@@ -19,7 +20,7 @@ export class AccessTokenGuard implements CanActivate {
 
     try {
       const payload = await this.jwtService.verifyAsync(token);
-      request[REQUEST_USER_KEY] = payload;
+      request[REQUEST_USER_KEY] = payload as User;
     } catch (error) {
       throw new UnauthorizedException();
     }

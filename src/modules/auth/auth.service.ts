@@ -20,7 +20,7 @@ export class AuthService {
 
   constructor(
     private readonly userService: UserService,
-    private readonly jwtService: JwtService
+    private readonly jwtService: JwtService,
   ) {
 
     // Bind verification methods to preserve 'this' context
@@ -57,19 +57,18 @@ export class AuthService {
   }
 
   async issueTokens(user: User): Promise<{ accessToken: string, refreshToken: string }> {
-    const payload = { walletAddress: user.walletAddress, id: user.id, chainType: user.chainType, role: user.role, chainId: user.chainId };
+    const payload = { walletAddress: user.walletAddress, id: user.id, chainType: user.chainType, role: user.role };
 
     const [accessToken, refreshToken] = await Promise.all([
       this.signToken(user.id, 3600 * 15, payload),
       this.signToken(user.id, 3600 * 24 * 7, payload),
     ])
 
-
     return { accessToken, refreshToken };
   }
 
   async verifyRefreshToken(refreshToken: string): Promise<User> {
-    console.log('refreshToken', refreshToken);
+
     const token = await this.jwtService.verifyAsync(refreshToken);
     if (!token) {
       throw new UnauthorizedException('Invalid refresh token');
@@ -170,11 +169,8 @@ export class AuthService {
 
   private async signToken<T>(userId: number, expiresIn: number, payload?: T) {
     return await this.jwtService.signAsync(
-      {
-        sub: userId,
-        expiresIn,
-        ...payload,
-      },
+      { sub: userId, ...payload },
+      { expiresIn }
     );
   }
 

@@ -10,6 +10,7 @@ export class UserController {
   @Get('me')
   async getProfile(@Request() { user: { walletAddress } }: { user: { walletAddress: string } }) {
     const user = await this.userService.findUserByWalletAddress(walletAddress);
+    
     return user;
   }
 }

@@ -17,7 +17,6 @@ export class AuthController {
   async generateNonce(
     @Body() generateNonceDto: GenerateNonceDto,
   ) {
-    console.log('generateNonceDto', generateNonceDto);
     let user = await this.userService.findUserByWalletAddress(generateNonceDto.walletAddress);
 
     if (!user) {
@@ -34,6 +33,7 @@ export class AuthController {
   ) {
     const user = await this.userService.findUserByWalletAddress(verifyAuthDto.walletAddress);
     if (!user || !user.nonce) {
+
       throw new BadRequestException('User not found or nonce is not set');
     }
 

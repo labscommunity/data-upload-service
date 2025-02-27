@@ -11,11 +11,24 @@ export class UserService {
   ) { }
 
   async findUserByWalletAddress(walletAddress: string) {
-    return this.databaseService.user.findUnique({ where: { walletAddress } });
+    return this.databaseService.user.findUnique({
+      where: { walletAddress },
+      include: {
+        paymentTransactions: true,
+        uploads: true,
+        receipts: true,
+      }
+    });
   }
 
   async createUser(data: CreateUserDto) {
-    return this.databaseService.user.create({ data });
+    return this.databaseService.user.create({
+      data, include: {
+        paymentTransactions: true,
+        uploads: true,
+        receipts: true,
+      }
+    });
   }
 
   async setNonce(user: User, nonce: string) {

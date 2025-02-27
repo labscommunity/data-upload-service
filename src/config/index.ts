@@ -27,4 +27,14 @@ export default () => ({
   evm: {
     address: process.env.EVM_ADDRESS,
   },
+  admin: {
+    feeConfig: {
+      addresses: {
+        evm: process.env.FEE_ADDRESS_EVM,
+        solana: process.env.FEE_ADDRESS_SOLANA,
+      },
+      feePercentage: process.env.FEE_PERCENTAGE,
+    },
+    arweaveJWK: process.env.AR_HOT_WALLET,
+  }
 });

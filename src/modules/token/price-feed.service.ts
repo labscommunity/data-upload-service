@@ -2,6 +2,7 @@ import { Injectable, ServiceUnavailableException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { TokenTicker } from '@prisma/client';
 import axios from 'axios';
+import { BigNumber } from 'bignumber.js';
 import { RestClient, restClient } from "coinmarketcap-js";
 import { LoggerService } from 'src/core/logger/logger.service';
 
@@ -29,7 +30,7 @@ export class PriceFeedService {
     async getUploadCostEstimateInUSD(size: number): Promise<number> {
 
         const priceInWinston = await this.getUploadCostEstimateInWinston(size);
-        const priceInAR = priceInWinston / 1000000000000;
+        const priceInAR = priceInWinston / 1000000000000; // TODO: move to constants
 
         try {
             const price = await this.client.tools.priceConversion({
@@ -45,7 +46,7 @@ export class PriceFeedService {
         }
     }
 
-    async convertToTokenAmount(amountInUSD: number, tokenTicker: TokenTicker) {
+    async convertToTokenAmount(amountInUSD: number, tokenTicker: TokenTicker, decimals: number) {
         try {
             const tokenPriceResponse = await this.client.tools.priceConversion({
                 amount: amountInUSD,
@@ -53,10 +54,26 @@ export class PriceFeedService {
                 convert: tokenTicker,
             });
 
-            return tokenPriceResponse.data.quote[tokenTicker].price;
+            const amount = tokenPriceResponse.data.quote[tokenTicker].price;
+            const amountInSubUnits = await this.convertToSubUnits(amount, decimals);
+            const amountInScaledUnits = await this.convertToScaledUnits(amountInSubUnits, decimals);
+
+            if (!(BigNumber(amount).isEqualTo(BigNumber(amountInScaledUnits)))) {
+                return { amount: amountInScaledUnits, amountInSubUnits };
+            }
+
+            return { amount, amountInSubUnits };
         } catch (error) {
             this.logger.error('Failed to get token price', error);
             throw new ServiceUnavailableException('Failed to get token price');
         }
+    }
+
+    async convertToSubUnits(amount: number, decimals: number) {
+        return new BigNumber(amount).multipliedBy(new BigNumber(10).pow(decimals)).integerValue(BigNumber.ROUND_UP).toFixed();
+    }
+
+    async convertToScaledUnits(amount: string, decimals: number) {
+        return new BigNumber(amount).dividedBy(new BigNumber(10).pow(decimals)).toFixed();
     }
 }

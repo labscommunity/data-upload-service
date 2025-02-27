@@ -1,6 +1,5 @@
 import { ChainType } from '@prisma/client';
-import { Type } from 'class-transformer';
-import { IsEnum, IsInt, IsNotEmpty, IsOptional, IsString } from 'class-validator';
+import { IsEnum, IsNotEmpty, IsOptional, IsString } from 'class-validator';
 
 export class VerifyAuthDto {
     @IsNotEmpty()
@@ -10,11 +9,6 @@ export class VerifyAuthDto {
     @IsNotEmpty()
     @IsEnum(ChainType)
     chainType: ChainType;
-
-    @IsInt()
-    @IsNotEmpty()
-    @Type(() => Number)
-    chainId: number;
 
     @IsNotEmpty()
     @IsString()

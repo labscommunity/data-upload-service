@@ -34,6 +34,7 @@ import { QueueModule } from './queue/queue.module';
       },
       inject: [ConfigService],
     }),
+
   ],
   providers: [
     {
@@ -50,8 +51,9 @@ import { QueueModule } from './queue/queue.module';
     },
     AccessTokenGuard,
     LoggerService,
+
   ],
-  exports: [LoggerService, JwtModule],
+  exports: [LoggerService, JwtModule,],
 })
 export class CoreModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {
