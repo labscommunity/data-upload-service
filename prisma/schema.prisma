@@ -1,0 +1,187 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                  Int                  @id @default(autoincrement())
+  walletAddress       String               @unique
+  chainType           ChainType
+  role                Role                 @default(User)
+  nonce               String?
+  domain              String?
+  issuedAt            DateTime?
+  lastSignature       String?
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+  uploads             Upload[]
+  receipts            Receipt[]
+  // balances     TokenBalance[]
+  paymentTransactions PaymentTransaction[]
+}
+
+model Upload {
+  id                   String             @id @default(uuid())
+  fileName             String
+  mimeType             String
+  totalChunks          Int
+  currentChunk         Int                @default(-1) // -1 indicates no chunks received yet
+  fileLocation         String?
+  arweaveTxId          String?
+  size                 Int
+  uploadEstimate       String // Amount in smallest unit (wei/lamports)
+  uploadEstimateUSD    String
+  paymentTransactionId String             @unique
+  paymentTransaction   PaymentTransaction @relation(fields: [paymentTransactionId], references: [id])
+  status               UploadStatus       @default(NOT_STARTED)
+  uploadType           UploadType
+  receipt              Receipt?
+  tags                 Json?              @default("[]") // Stores tags as a JSON array
+  userWalletAddress    String
+  user                 User               @relation(fields: [userWalletAddress], references: [walletAddress])
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+  feeTransaction       FeeTransaction?
+}
+
+model Receipt {
+  id                String        @id @default(uuid())
+  user              User          @relation(fields: [userWalletAddress], references: [walletAddress])
+  userWalletAddress String
+  status            ReceiptStatus @default(PENDING)
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+  tokenId           String
+  token             Token         @relation(fields: [tokenId], references: [id])
+  uploadId          String        @unique
+  upload            Upload        @relation(fields: [uploadId], references: [id])
+}
+
+// model TokenBalance {
+//   id      String  @id @default(uuid())
+//   tokenId String
+//   token   Token   @relation(fields: [tokenId], references: [id])
+//   balance Decimal @default(0.0)
+
+//   userWalletAddress String
+//   user              User   @relation(fields: [userWalletAddress], references: [walletAddress])
+
+//   createdAt DateTime @default(now())
+//   updatedAt DateTime @updatedAt
+
+//   @@unique([userWalletAddress, tokenId])
+// }
+
+model Token {
+  id                  String               @id @default(uuid())
+  address             String
+  name                String
+  ticker              TokenTicker
+  decimals            Int
+  chainType           ChainType
+  chainId             Int
+  network             Network
+  receipts            Receipt[]
+  paymentTransactions PaymentTransaction[]
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+  // tokenBalances TokenBalance[]
+}
+
+model PaymentTransaction {
+  id                String @id @default(uuid())
+  userWalletAddress String
+  user              User   @relation(fields: [userWalletAddress], references: [walletAddress])
+
+  tokenId          String
+  token            Token             @relation(fields: [tokenId], references: [id])
+  amount           String
+  amountInSubUnits String
+  status           TransactionStatus @default(PENDING)
+  transactionHash  String?           @unique
+  upload           Upload?
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+}
+
+model FeeTransaction {
+  id               String            @id @default(uuid())
+  amount           String
+  amountInSubUnits String
+  status           TransactionStatus @default(PENDING)
+  transactionHash  String?           @unique
+  uploadId         String            @unique
+  upload           Upload            @relation(fields: [uploadId], references: [id])
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+}
+
+model Log {
+  id        String    @id @default(uuid())
+  eventType EventType
+  message   String?
+  metadata  Json?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+}
+
+enum UploadStatus {
+  NOT_STARTED
+  IN_PROGRESS
+  COMPLETED
+  FAILED
+}
+
+enum UploadType {
+  SINGLE_FILE
+  MULTIPART_FILE
+}
+
+enum TransactionStatus {
+  PENDING
+  SUCCEEDED
+  FAILED
+}
+
+enum TokenTicker {
+  USDC
+  USDT
+  ETH
+  SOL
+  AR
+}
+
+enum Role {
+  User
+  Admin
+}
+
+enum ReceiptStatus {
+  PENDING
+  PAID
+  COMPLETED
+  FAILED
+}
+
+enum ChainType {
+  evm
+  solana
+  arweave
+}
+
+enum Network {
+  mainnet
+  testnet
+}
+
+enum EventType {
+  INFO
+  ERROR
+  WARN
+  DEBUG
+  VERBOSE
+}

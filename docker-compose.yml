@@ -1,0 +1,33 @@
+version: '3.8'
+
+services:
+  arweave_storage_postgres:
+    image: postgres:alpine
+    container_name: arweave_storage_postgres
+    restart: always
+    env_file:
+      - .env
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+    ports:
+      - '5432:5432'
+    volumes:
+      - arweave_storage_postgres_data:/var/lib/postgresql/data
+  
+  arweave_storage_redis:
+    image: redis:alpine
+    container_name: arweave_storage_redis
+    ports:
+      - '6379:6379'
+    volumes:
+      - arweave_storage_redis_data:/data
+
+networks:
+  default:
+    name: arweave_storage
+
+volumes:
+  arweave_storage_postgres_data:
+  arweave_storage_redis_data:
+
