@@ -12,7 +12,6 @@ export class ArweaveUploader {
             port: 443,
             protocol: 'https',
         });
-        console.log(this.jwk)
         this.signer = new ArweaveSigner(this.jwk);
     }
 

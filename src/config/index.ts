@@ -23,9 +23,11 @@ export default () => ({
   },
   solana: {
     address: process.env.SOLANA_ADDRESS,
+    pk: process.env.SOLANA_PK,
   },
   evm: {
     address: process.env.EVM_ADDRESS,
+    pk: process.env.EVM_PK,
   },
   admin: {
     feeConfig: {

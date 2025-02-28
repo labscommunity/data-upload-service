@@ -1,4 +1,4 @@
-import { Processor, } from '@nestjs/bullmq';
+import { OnWorkerEvent, Processor, } from '@nestjs/bullmq';
 import { ConfigService } from '@nestjs/config';
 import { ReceiptStatus, TransactionStatus, UploadStatus } from '@prisma/client';
 import { Tag } from 'arweave/node/lib/transaction';
@@ -11,6 +11,7 @@ import { UPLOAD_QUEUE } from '../../../core/queue/queue.constants';
 import { UploadFileJobDto } from '../dto/upload-file-job.dto';
 import { UploadService } from '../upload.service';
 import { ArweaveUploader } from '../utils/ArweaveUploader.util';
+import { FeeProducer } from './fee.producer';
 
 
 @Processor(UPLOAD_QUEUE)
@@ -20,7 +21,8 @@ export class UploadConsumer extends BaseConsumer {
     constructor(
         logger: LoggerService,
         private readonly uploadService: UploadService,
-        private readonly config: ConfigService
+        private readonly config: ConfigService,
+        private readonly feeProducer: FeeProducer
     ) {
         super(logger);
         const jwk = JSON.parse(this.config.get('admin.arweaveJWK') as string);
@@ -38,13 +40,25 @@ export class UploadConsumer extends BaseConsumer {
         this.uploadService.updateUploadStatus(requestId, UploadStatus.COMPLETED);
         this.uploadService.updateUploadReceiptStatus(requestId, ReceiptStatus.COMPLETED);
         this.uploadService.updatePaymentTransactionStatus(requestId, TransactionStatus.SUCCEEDED);
+
         await unlink(file.path);
+
+
+        const feeRecord = await this.uploadService.createFeeTransaction(requestId)
+
+        return {
+            uploadId: requestId,
+            feeRecordId: feeRecord.id
+        };
     }
 
-    // @OnWorkerEvent('completed')
-    // async onCompleted(job: Job) {
-    //     // TODO: charge fee from funding account to fee account
-    //     // TODO: update upload status to completed
-    //     console.log('onCompleted', job);
-    // }
+    @OnWorkerEvent('completed')
+    async onCompleted(job: Job) {
+        const { uploadId, feeRecordId } = job.returnvalue;
+
+        this.feeProducer.extractFee({
+            uploadId,
+            feeRecordId
+        })
+    }
 }

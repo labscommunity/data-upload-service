@@ -55,8 +55,8 @@ export class PriceFeedService {
             });
 
             const amount = tokenPriceResponse.data.quote[tokenTicker].price;
-            const amountInSubUnits = await this.convertToSubUnits(amount, decimals);
-            const amountInScaledUnits = await this.convertToScaledUnits(amountInSubUnits, decimals);
+            const amountInSubUnits = this.convertToSubUnits(amount, decimals);
+            const amountInScaledUnits = this.convertToScaledUnits(amountInSubUnits, decimals);
 
             if (!(BigNumber(amount).isEqualTo(BigNumber(amountInScaledUnits)))) {
                 return { amount: amountInScaledUnits, amountInSubUnits };
@@ -69,11 +69,11 @@ export class PriceFeedService {
         }
     }
 
-    async convertToSubUnits(amount: number, decimals: number) {
+    convertToSubUnits(amount: number, decimals: number) {
         return new BigNumber(amount).multipliedBy(new BigNumber(10).pow(decimals)).integerValue(BigNumber.ROUND_UP).toFixed();
     }
 
-    async convertToScaledUnits(amount: string, decimals: number) {
+    convertToScaledUnits(amount: string, decimals: number) {
         return new BigNumber(amount).dividedBy(new BigNumber(10).pow(decimals)).toFixed();
     }
 }

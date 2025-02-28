@@ -106,13 +106,13 @@ export class UploadController {
       network: token.network,
       chainId: +token.chainId,
       senderAddress: (req as any).user.walletAddress,
-      amount: paymentTransaction.amountInSubUnits
+      amount: paymentTransaction.amountInSubUnits,
+      tokenAddress: token.address
     });
 
     if (!verified) {
       throw new BadRequestException('Payment verification failed. Invalid transaction hash or amount');
     }
-
 
     const receipt = await this.uploadService.createReceipt({
       uploadId: uploadRequest.id,

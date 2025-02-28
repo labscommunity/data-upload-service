@@ -3,7 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { ChainType, Network, ReceiptStatus, TokenTicker, TransactionStatus, UploadStatus } from '@prisma/client';
 import { Connection, ParsedInstruction } from '@solana/web3.js';
 import BigNumber from 'bignumber.js';
-import { getAddress, Interface, Provider } from 'ethers';
+import { Contract, getAddress, Interface, Provider } from 'ethers';
 import { DatabaseService } from 'src/database/database.service';
 
 import { User } from '../auth/user.types';
@@ -161,7 +161,43 @@ export class UploadService {
     return receipt
   }
 
+  async createFeeTransaction(uploadId: string) {
+    const upload = await this.getUploadRequest(uploadId);
+
+    if (!upload) {
+      throw new BadRequestException('Upload request not found');
+    }
+
+    const paymentTransaction = await this.getPaymentTransaction(upload.paymentTransactionId);
+
+    if (!paymentTransaction) {
+      throw new BadRequestException('Payment transaction not found');
+    }
+
+    const token = await this.getToken(paymentTransaction.tokenId);
+
+    if (!token) {
+      throw new BadRequestException('Payment token not found');
+    }
+
+    const feePercentage = await this.configService.get('admin.feeConfig.feePercentage');
+    const feeAmountInSubUnits = BigNumber(paymentTransaction.amountInSubUnits).times(feePercentage).div(100).integerValue(BigNumber.ROUND_UP).toString();
+    const feeAmountInScaledUnits = this.priceFeedService.convertToScaledUnits(feeAmountInSubUnits, token.decimals);
+
+
+    const feeTransaction = await this.databaseService.feeTransaction.create({
+      data: {
+        uploadId,
+        amount: feeAmountInScaledUnits,
+        amountInSubUnits: feeAmountInSubUnits,
+      }
+    })
+
+    return feeTransaction;
+  }
+
   async verifyPayment({
+    tokenAddress,
     paymentTx,
     chainType,
     chainId,
@@ -169,6 +205,7 @@ export class UploadService {
     amount,
     network
   }: {
+    tokenAddress: string;
     paymentTx: string;
     chainType: ChainType;
     network: Network;
@@ -208,7 +245,7 @@ export class UploadService {
         for (const log of receipt.logs) {
           console.log({ log: JSON.stringify(log, null, 2), to: receipt.to })
           // Filter logs from the specified token contract.
-          if (log.address.toLowerCase() === receipt.to.toLowerCase()) {
+          if (log.address.toLowerCase() === tokenAddress.toLowerCase()) {
             console.log("erc20 transfer found")
             const normalizedTopics = log.topics.map((t) => t.toString());
             const normalizedLog = { ...log, topics: normalizedTopics };
@@ -343,6 +380,23 @@ export class UploadService {
     return paymentTransaction;
   }
 
+  async getFeeTransaction(feeRecordId: string) {
+    const feeTransaction = await this.databaseService.feeTransaction.findFirst({
+      where: {
+        id: feeRecordId,
+      },
+      include: {
+        upload: true
+      }
+    });
+
+    if (!feeTransaction) {
+      throw new BadRequestException("Fee transaction not found");
+    }
+
+    return feeTransaction;
+  }
+
   async getToken(tokenId: string) {
     const token = await this.databaseService.token.findFirst({
       where: {
@@ -392,6 +446,68 @@ export class UploadService {
       where: { id: uploadRequest.paymentTransactionId },
       data: { status }
     });
+  }
+
+  async debitFeeFromSystemWallet(feeTransactionId: string) {
+    const feeTransaction = await this.getFeeTransaction(feeTransactionId);
+
+    if (!feeTransaction) {
+      throw new BadRequestException("Fee transaction not found");
+    }
+
+    const paymentTransaction = await this.getPaymentTransaction(feeTransaction.upload.paymentTransactionId);
+
+    if (!paymentTransaction) {
+      throw new BadRequestException("Payment transaction not found");
+    }
+
+    const token = await this.getToken(paymentTransaction.tokenId);
+
+    if (!token) {
+      throw new BadRequestException("Token not found");
+    }
+
+    const systemAddress = this.configService.get(`${token.chainType}.address`);
+    const systemPrivateKey = this.configService.get(`${token.chainType}.pk`);
+    const feeAddress = this.configService.get(`admin.feeConfig.addresses.${token.chainType}`);
+
+    if (!systemAddress || !feeAddress) {
+      throw new BadRequestException(`System address or fee address not found for chain type ${token.chainType}`);
+    }
+
+    const feeAmount = feeTransaction.amountInSubUnits;
+    if (ChainType.evm === token.chainType) {
+      // Minimal ERC20 ABI with transfer function.
+      const ERC20_ABI = [
+        "function transfer(address recipient, uint256 amount) external returns (bool)"
+      ];
+      const signer = Web3Provider.getSigner(token.chainType, token.chainId, systemPrivateKey);
+      const tokenContract = new Contract(token.address, ERC20_ABI, signer);
+      const feeAmountBN = BigInt(feeAmount);
+
+      const contractSigner = tokenContract.connect(signer) as any
+
+      const tx = await contractSigner.transfer(feeAddress, feeAmountBN)
+
+      const receipt = await tx.wait();
+
+      if (!receipt || receipt.status !== 1) {
+        throw new BadRequestException("Fee transaction failed");
+      }
+
+      await this.databaseService.feeTransaction.update({
+        where: { id: feeTransactionId },
+        data: { status: TransactionStatus.SUCCEEDED, transactionHash: tx.hash }
+      });
+    }
+
+    if (ChainType.solana === token.chainType) {
+      //
+      throw new BadRequestException("Solana fee debit not implemented");
+    }
+
+
+
   }
 
   private async validateToken(chainType: ChainType, tokenTicker: TokenTicker, chainId: number, network: Network) {

@@ -1,7 +1,7 @@
 import { BadRequestException } from '@nestjs/common';
 import { ChainType, Network } from '@prisma/client';
 import { Connection } from '@solana/web3.js';
-import { ethers, Provider } from 'ethers';
+import { ethers, Provider, Signer } from 'ethers';
 
 
 export const evmChainIdMap = {
@@ -62,6 +62,17 @@ export class Web3Provider {
             return this.getEvmProvider(chainId);
         } else if (chainType === ChainType.solana) {
             return this.getSolanaConnection(network);
+        } else {
+            throw new Error('Unsupported chain type');
+        }
+    }
+
+    public static getSigner(chainType: ChainType, chainId: number, privateKey: string): Signer {
+        if (chainType === ChainType.evm) {
+            return new ethers.Wallet(privateKey, this.getEvmProvider(chainId));
+        } else if (chainType === ChainType.solana) {
+           // TODO: Implement solana signer
+           throw new BadRequestException("Solana signer not implemented");
         } else {
             throw new Error('Unsupported chain type');
         }

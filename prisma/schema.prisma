@@ -78,6 +78,7 @@ model Receipt {
 
 model Token {
   id                  String               @id @default(uuid())
+  address             String
   name                String
   ticker              TokenTicker
   decimals            Int

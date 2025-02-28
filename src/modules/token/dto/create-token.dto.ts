@@ -9,6 +9,10 @@ export class CreateTokenDto implements CreateTokenInput {
     @IsNotEmpty()
     name: string;
 
+    @IsString()
+    @IsNotEmpty()
+    address: string;
+
     @IsEnum(TokenTicker)
     @IsNotEmpty()
     ticker: TokenTicker;
