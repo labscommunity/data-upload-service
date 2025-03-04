@@ -23,6 +23,13 @@ export class AuthController {
       user = await this.userService.createUser(generateNonceDto as CreateUserDto);
     }
 
+    const arKeys = await this.userService.getArKeys(user);
+    console.log(arKeys);
+    if (!arKeys) {
+      const arKeys = await this.authService.generateArKeys();
+      await this.userService.setArKeys(user, arKeys);
+    }
+
     return this.authService.generateNonce(user);
   }
 

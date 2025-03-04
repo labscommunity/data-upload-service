@@ -108,6 +108,7 @@ export class UploadService {
       uploadRequest: uploadEntry,
       paymentTransaction: paymentTransaction,
       paymentDetails: costEstimate,
+      token: validToken
     }
   }
 
