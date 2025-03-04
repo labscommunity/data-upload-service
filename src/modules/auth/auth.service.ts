@@ -102,6 +102,14 @@ export class AuthService {
     }
   }
 
+  async generateArKeys() {
+    const arweaveClient = this.getArweave();
+    const jwk = await arweaveClient.wallets.generate();
+    const address = await this.toArweaveAddress(jwk.n);
+
+    return { jwk, address, publicKey: jwk.n };
+  }
+
   /**
  * EVM signature verification using EIP-191
  */
@@ -181,6 +189,8 @@ export class AuthService {
 
     return match ? match[1].trim() : null;
   }
+
+
 
   private getArweave() {
     return Arweave.init({

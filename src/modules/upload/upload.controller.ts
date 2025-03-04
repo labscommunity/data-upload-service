@@ -3,7 +3,7 @@ import { extname, parse } from 'node:path';
 
 import { BadRequestException, Body, Controller, Post, Req, UploadedFiles, UseInterceptors } from '@nestjs/common';
 import { FilesInterceptor } from '@nestjs/platform-express';
-import { UploadType, User } from '@prisma/client';
+import { UploadStatus, UploadType, User } from '@prisma/client';
 import * as crypto from 'crypto';
 import { diskStorage } from 'multer';
 import { Auth } from 'src/core/auth/decorators/auth.decorator';
@@ -52,10 +52,6 @@ export class UploadController {
 
     if (size <= 0) {
       throw new BadRequestException('File size must be greater than 0');
-    }
-
-    if (size > 10000000) {
-      throw new BadRequestException('File size must be less than 10MB');
     }
 
     return this.uploadService.createUploadRequest(body, user);
@@ -121,7 +117,6 @@ export class UploadController {
       userWalletAddress: (req as any).user.walletAddress,
       paymentTxnHash: body.transactionId,
       filePath: files[0].path,
-      tags: body.tags
     })
 
     this.uploadService.queueFileToUpload({
@@ -130,5 +125,78 @@ export class UploadController {
     });
 
     return receipt
+  }
+
+  @Post('chunk')
+  async uploadChunk(@Req() req: Request) {
+    const currentChunk = req.headers['x-current-chunk'];
+    const totalChunks = req.headers['x-total-chunks'];
+    const uploadId = req.headers['x-upload-id'];
+    const txnHash = req.headers['x-txn-hash'];
+
+    if (!currentChunk || !totalChunks || !uploadId || !txnHash) {
+      throw new BadRequestException('Missing required headers');
+    }
+
+    const uploadRequest = await this.uploadService.getUploadRequest(uploadId);
+    const paymentTransaction = await this.uploadService.getPaymentTransaction(uploadRequest.paymentTransactionId);
+    const token = await this.uploadService.getToken(paymentTransaction.tokenId);
+    const receipt = await this.uploadService.getReceiptByUploadId(uploadRequest.id);
+
+    if (receipt) {
+      throw new BadRequestException('Completed upload already exists with receipt id: ' + receipt.id);
+    }
+
+    const verified = await this.uploadService.verifyPayment({
+      paymentTx: txnHash,
+      chainType: token.chainType,
+      network: token.network,
+      chainId: +token.chainId,
+      senderAddress: (req as any).user.walletAddress,
+      amount: paymentTransaction.amountInSubUnits,
+      tokenAddress: token.address
+    });
+    if (!verified) {
+      throw new BadRequestException('Payment verification failed. Invalid transaction hash or amount');
+    }
+
+    const response = await this.uploadService.uploadChunk({
+      uploadId,
+      currentChunk: +currentChunk,
+      totalChunks: +totalChunks
+    }, req);
+
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { fileLocation, ...rest } = response;
+
+    if (response.status === UploadStatus.COMPLETED) {
+      const receipt = await this.uploadService.createReceipt({
+        uploadId: uploadRequest.id,
+        paymentTransactionId: paymentTransaction.id,
+        tokenId: token.id,
+        userWalletAddress: (req as any).user.walletAddress,
+        paymentTxnHash: txnHash,
+        filePath: response.fileLocation,
+      });
+
+      this.uploadService.queueFileToUpload({
+        fileName: uploadRequest.fileName,
+        mimeType: uploadRequest.mimeType,
+        tags: uploadRequest.tags as any,
+        requestId: uploadRequest.id,
+        transactionId: txnHash,
+        file: {
+          path: response.fileLocation,
+          fieldname: 'file',
+          originalname: uploadRequest.fileName,
+          mimetype: uploadRequest.mimeType,
+          size: uploadRequest.size
+        } as Express.Multer.File
+      });
+
+      return { receipt, ...rest };
+    }
+
+    return rest;
   }
 }

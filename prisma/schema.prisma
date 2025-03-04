@@ -22,6 +22,7 @@ model User {
   receipts            Receipt[]
   // balances     TokenBalance[]
   paymentTransactions PaymentTransaction[]
+  arKeys              ArweaveKeyPair?
 }
 
 model Upload {
@@ -118,6 +119,17 @@ model FeeTransaction {
   upload           Upload            @relation(fields: [uploadId], references: [id])
   createdAt        DateTime          @default(now())
   updatedAt        DateTime          @updatedAt
+}
+
+model ArweaveKeyPair {
+  id                String   @id @default(uuid())
+  address           String
+  publicKey         String
+  privateKey        String
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  userWalletAddress String   @unique
+  user              User     @relation(fields: [userWalletAddress], references: [walletAddress])
 }
 
 model Log {

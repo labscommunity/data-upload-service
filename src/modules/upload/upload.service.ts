@@ -1,15 +1,20 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { ChainType, Network, ReceiptStatus, TokenTicker, TransactionStatus, UploadStatus } from '@prisma/client';
+import { ChainType, Network, ReceiptStatus, TokenTicker, TransactionStatus, UploadStatus, } from '@prisma/client';
 import { Connection, ParsedInstruction } from '@solana/web3.js';
 import BigNumber from 'bignumber.js';
 import { Contract, getAddress, Interface, Provider } from 'ethers';
+import * as fs from 'fs';
+import path from 'path';
 import { DatabaseService } from 'src/database/database.service';
+import { pipeline } from 'stream';
+import { promisify } from 'util';
 
 import { User } from '../auth/user.types';
 import { PriceFeedService } from '../token/price-feed.service';
 import { CreateUploadRequestDto } from './dto/create-upload-request.dto';
 import { EstimatesDto } from './dto/estimates.dto';
+import { UploadChunkDto } from './dto/upload-chunk.dto';
 import { UploadFileJobDto } from './dto/upload-file-job.dto';
 import { UploadProducer } from './queue/upload.producer';
 import { Web3Provider } from './utils/Web3Provider.util';
@@ -17,6 +22,7 @@ import { Web3Provider } from './utils/Web3Provider.util';
 const ERC20_ABI = [
   "event Transfer(address indexed from, address indexed to, uint256 value)"
 ];
+const pump = promisify(pipeline);
 
 @Injectable()
 export class UploadService {
@@ -62,7 +68,7 @@ export class UploadService {
   }
 
   async createUploadRequest(createUploadRequestDto: CreateUploadRequestDto, user: User) {
-    const { totalChunks, uploadType, fileName, size, tokenTicker, mimeType, network, chainId } = createUploadRequestDto
+    const { totalChunks, uploadType, fileName, size, tokenTicker, mimeType, network, chainId, tags } = createUploadRequestDto
     const { chainType } = user
 
     const validToken = await this.validateToken(chainType, tokenTicker, chainId, network)
@@ -101,6 +107,7 @@ export class UploadService {
         uploadEstimateUSD: BigNumber(costEstimate.usd).toFixed(),
         mimeType: mimeType,
         totalChunks: totalChunks,
+        tags: tags as any
       }
     })
 
@@ -108,6 +115,7 @@ export class UploadService {
       uploadRequest: uploadEntry,
       paymentTransaction: paymentTransaction,
       paymentDetails: costEstimate,
+      token: validToken
     }
   }
 
@@ -118,7 +126,6 @@ export class UploadService {
     userWalletAddress,
     paymentTxnHash,
     filePath,
-    tags
   }) {
     const existingReceipt = await this.databaseService.receipt.findUnique({
       where: {
@@ -135,7 +142,8 @@ export class UploadService {
         id: paymentTransactionId
       },
       data: {
-        transactionHash: paymentTxnHash
+        transactionHash: paymentTxnHash,
+        status: TransactionStatus.SUCCEEDED
       }
     })
 
@@ -145,7 +153,6 @@ export class UploadService {
       },
       data: {
         fileLocation: filePath,
-        tags: tags
       }
     })
 
@@ -397,6 +404,14 @@ export class UploadService {
     return feeTransaction;
   }
 
+  async getReceiptByUploadId(uploadId: string) {
+    return await this.databaseService.receipt.findFirst({
+      where: {
+        uploadId,
+      },
+    });
+  }
+
   async getToken(tokenId: string) {
     const token = await this.databaseService.token.findFirst({
       where: {
@@ -527,5 +542,66 @@ export class UploadService {
     }
 
     return validToken;
+  }
+
+  async uploadChunk(payload: UploadChunkDto, req: any) {
+    const { uploadId, currentChunk: chunkIndex, totalChunks } = payload;
+
+    const uploadRequest = await this.getUploadRequest(uploadId);
+
+    if (!uploadRequest) {
+      throw new BadRequestException("Upload request not found");
+    }
+
+    if (uploadRequest.totalChunks !== totalChunks) {
+      throw new BadRequestException("Total chunks mismatch");
+    }
+    const notStartedStatus: UploadStatus[] = [UploadStatus.NOT_STARTED, UploadStatus.IN_PROGRESS];
+
+    if (!notStartedStatus.includes(uploadRequest.status)) {
+      throw new BadRequestException("Upload is not in progress");
+    }
+
+    const uploadsDir = path.join(process.cwd(), `uploads/${uploadRequest.userWalletAddress}`);
+
+    if (!fs.existsSync(uploadsDir)) {
+      fs.mkdirSync(uploadsDir, { recursive: true });
+    }
+    const filePath = path.join(uploadsDir, `${uploadRequest.id}.bin`);
+
+
+    if (chunkIndex !== uploadRequest.currentChunk + 1) throw new BadRequestException(`Invalid chunk order. Expected ${uploadRequest.currentChunk + 1}`);
+    const writeStream = fs.createWriteStream(filePath, { flags: chunkIndex === 0 ? 'w' : 'a' });
+
+    await pump(req, writeStream);
+    await this.databaseService.upload.update({
+      where: { id: uploadId },
+      data: { currentChunk: chunkIndex, status: uploadRequest.status === UploadStatus.NOT_STARTED ? UploadStatus.IN_PROGRESS : uploadRequest.status }
+    });
+
+    const progress = Math.round((chunkIndex / totalChunks) * 100);
+
+    if (chunkIndex === totalChunks - 1) {
+      await this.databaseService.upload.update({
+        where: { id: uploadId },
+        data: { status: UploadStatus.COMPLETED }
+      });
+
+      return {
+        status: UploadStatus.COMPLETED,
+        totalChunks: uploadRequest.totalChunks,
+        currentChunk: uploadRequest.currentChunk,
+        progress: progress,
+        fileLocation: filePath
+      }
+    }
+
+    return {
+      status: uploadRequest.status,
+      totalChunks: uploadRequest.totalChunks,
+      currentChunk: uploadRequest.currentChunk,
+      progress: progress,
+      fileLocation: filePath
+    }
   }
 }

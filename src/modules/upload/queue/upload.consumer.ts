@@ -1,7 +1,7 @@
 import { OnWorkerEvent, Processor, } from '@nestjs/bullmq';
+import { BadRequestException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { ReceiptStatus, TransactionStatus, UploadStatus } from '@prisma/client';
-import { Tag } from 'arweave/node/lib/transaction';
+import { ReceiptStatus, UploadStatus } from '@prisma/client';
 import { Job } from 'bullmq';
 import { readFile, unlink } from 'fs/promises';
 import { BaseConsumer } from 'src/core/queue/base.consumer';
@@ -32,14 +32,23 @@ export class UploadConsumer extends BaseConsumer {
     }
 
     async process(job: Job<UploadFileJobDto>) {
-        const { file, tags, requestId } = job.data
+        const { file, requestId } = job.data
         const buffer = await readFile(file.path);
-        const txId = await this.arweaveUploader.upload(buffer, tags as Tag[]);
+        const isSignedValidBundle = await ArweaveUploader.isSignedValidDataItemsInBundle(buffer);
+
+        if (!isSignedValidBundle) {
+            throw new BadRequestException('Data item is not signed or invalid');
+        }
+
+        const dataItems = ArweaveUploader.unpackBundle(buffer);
+
+        await this.arweaveUploader.bundleAndUploadDataItems(dataItems);
+
+        const txId = dataItems[0].id
 
         this.uploadService.updateUploadTxId(requestId, txId);
         this.uploadService.updateUploadStatus(requestId, UploadStatus.COMPLETED);
         this.uploadService.updateUploadReceiptStatus(requestId, ReceiptStatus.COMPLETED);
-        this.uploadService.updatePaymentTransactionStatus(requestId, TransactionStatus.SUCCEEDED);
 
         await unlink(file.path);
 
