@@ -24,7 +24,7 @@ export class AuthController {
     }
 
     const arKeys = await this.userService.getArKeys(user);
-    console.log(arKeys);
+
     if (!arKeys) {
       const arKeys = await this.authService.generateArKeys();
       await this.userService.setArKeys(user, arKeys);

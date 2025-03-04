@@ -1,12 +1,16 @@
 import { Network, TokenTicker, UploadType } from '@prisma/client';
-import { Type } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 import {
+    IsArray,
     IsEnum,
     IsInt,
     IsNotEmpty,
     IsOptional,
-    IsString
+    IsString,
 } from 'class-validator';
+import { ValidateNested } from 'src/common/decorators/validate-nested/validate-nested.decorator';
+
+import { TagDto } from './tag.dto';
 
 export class CreateUploadRequestDto {
     @IsString()
@@ -44,4 +48,14 @@ export class CreateUploadRequestDto {
     @Type(() => Number)
     @IsNotEmpty()
     chainId: number;
+
+    @IsArray()
+    @IsNotEmpty()
+    @IsOptional()
+    @Type(() => TagDto)
+    @ValidateNested(TagDto, { each: true, message: 'Tag is not valid' })
+    @Transform(({ value }) => {
+        return JSON.parse(value) as TagDto[];
+    })
+    tags: TagDto[];
 }

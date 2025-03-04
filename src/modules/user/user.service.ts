@@ -18,7 +18,7 @@ export class UserService {
         paymentTransactions: true,
         uploads: true,
         receipts: true,
-        arKeys: true,
+        arKeys: false,
       }
     });
   }
@@ -29,9 +29,15 @@ export class UserService {
         paymentTransactions: true,
         uploads: true,
         receipts: true,
-        arKeys: true,
+        arKeys: false,
       }
     });
+  }
+
+  async hasArKeys(user: User) {
+    const arKey = await this.databaseService.arweaveKeyPair.findUnique({ where: { userWalletAddress: user.walletAddress } });
+
+    return !!arKey;
   }
 
   async setArKeys(user: User, arKeys: ArKeys) {
