@@ -1,6 +1,23 @@
 version: '3.8'
 
 services:
+  arweave_storage_api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: arweave_storage_api
+    restart: always
+    ports:
+      - '3000:3000'
+    env_file:
+      - .env
+    depends_on:
+      - arweave_storage_postgres
+      - arweave_storage_redis
+    volumes:
+      - .:/usr/src/app
+      - /usr/src/app/node_modules
+
   arweave_storage_postgres:
     image: postgres:alpine
     container_name: arweave_storage_postgres
@@ -30,4 +47,3 @@ networks:
 volumes:
   arweave_storage_postgres_data:
   arweave_storage_redis_data:
-
