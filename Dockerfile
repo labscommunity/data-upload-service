@@ -23,5 +23,5 @@ RUN pnpm build
 # Expose port
 EXPOSE 3000
 
-# Start app
+
 CMD ["sh", "-c", "pnpm db:migrate:prod && pnpm start:prod"]
