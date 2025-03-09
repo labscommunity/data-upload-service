@@ -7,16 +7,12 @@ RUN npm install -g pnpm
 # Create app directory
 WORKDIR /usr/src/app
 
-# Copy package files
+# Copy package files and install dependencies
 COPY package*.json pnpm-lock.yaml ./
-
-# Install dependencies
 RUN pnpm install --frozen-lockfile
 
-# Copy app source
+# Copy app source code
 COPY . .
-
-RUN pnpm install --frozen-lockfile
 
 # Generate Prisma client
 RUN pnpm prisma generate
