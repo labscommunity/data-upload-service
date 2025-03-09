@@ -14,6 +14,8 @@ RUN pnpm install --frozen-lockfile
 # Copy app source code
 COPY . .
 
+RUN pnpm db:migrate:prod
+
 # Generate Prisma client
 RUN pnpm prisma generate
 
