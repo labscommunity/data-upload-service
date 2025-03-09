@@ -14,8 +14,6 @@ RUN pnpm install --frozen-lockfile
 # Copy app source code
 COPY . .
 
-RUN pnpm db:migrate:prod
-
 # Generate Prisma client
 RUN pnpm prisma generate
 
@@ -26,4 +24,4 @@ RUN pnpm build
 EXPOSE 3000
 
 # Start app
-CMD ["pnpm", "start:prod"]
+CMD ["sh", "-c", "pnpm db:migrate:prod && pnpm start:prod"]
