@@ -10,6 +10,6 @@ export class UploadProducer {
     constructor(@InjectQueue(UPLOAD_QUEUE) private uploadQueue: Queue) { }
 
     async uploadFile(payload: UploadFileJobDto) {
-        return await this.uploadQueue.add(`uploadFileToArweave`, payload);
+        return this.uploadQueue.add(`uploadFileToArweave`, payload, { delay: 1000, attempts: 7, backoff: { type: 'exponential', delay: 10000 } });
     }
 }
