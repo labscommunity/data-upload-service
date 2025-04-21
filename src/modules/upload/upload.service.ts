@@ -6,6 +6,7 @@ import BigNumber from 'bignumber.js';
 import { Contract, getAddress, Interface, Provider } from 'ethers';
 import * as fs from 'fs';
 import path from 'path';
+import { paginator } from 'src/common/utils/paginator';
 import { DatabaseService } from 'src/database/database.service';
 import { pipeline } from 'stream';
 import { promisify } from 'util';
@@ -23,6 +24,8 @@ const ERC20_ABI = [
   "event Transfer(address indexed from, address indexed to, uint256 value)"
 ];
 const pump = promisify(pipeline);
+
+const paginate = paginator({ perPage: 10 });
 
 @Injectable()
 export class UploadService {
@@ -65,6 +68,22 @@ export class UploadService {
       [ticker]: costInToken,
       "payAddress": payAddress
     };
+  }
+
+  async getUploadRequests({ page = 1, perPage = 10 }: { page?: number, perPage?: number }) {
+    return await paginate(this.databaseService.upload, {
+      orderBy: {
+        createdAt: 'desc'
+      }
+    }, { page, perPage });
+  }
+
+  async getReceipts({ page = 1, perPage = 10 }: { page?: number, perPage?: number }) {
+    return await paginate(this.databaseService.receipt, {
+      orderBy: {
+        createdAt: 'desc'
+      }
+    }, { page, perPage });
   }
 
   async createUploadRequest(createUploadRequestDto: CreateUploadRequestDto, user: User) {
@@ -402,6 +421,14 @@ export class UploadService {
     }
 
     return feeTransaction;
+  }
+
+  async getReceiptById(receiptId: string) {
+    return await this.databaseService.receipt.findFirst({
+      where: {
+        id: receiptId,
+      },
+    });
   }
 
   async getReceiptByUploadId(uploadId: string) {
