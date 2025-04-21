@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync } from 'node:fs';
 import { extname, parse } from 'node:path';
 
-import { BadRequestException, Body, Controller, Post, Req, UploadedFiles, UseInterceptors } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Get, Param, Post, Query, Req, UploadedFiles, UseInterceptors } from '@nestjs/common';
 import { FilesInterceptor } from '@nestjs/platform-express';
 import { UploadStatus, UploadType, User } from '@prisma/client';
 import * as crypto from 'crypto';
@@ -19,43 +19,11 @@ import { UploadService } from './upload.service';
 export class UploadController {
   constructor(private readonly uploadService: UploadService) { }
 
-  @Post('cost')
-  getEstimate(@Body() body: EstimatesDto) {
-    return this.uploadService.getCostEstimate(body);
+  @Get()
+  async getUploadRequests(@Query('page') page: number, @Query('limit') limit: number) {
+    return this.uploadService.getUploadRequests({ page, perPage: limit });
   }
 
-  @Post('create')
-  createUploadRequest(@Body() body: CreateUploadRequestDto, @Req() req: Request) {
-    const { totalChunks, uploadType, fileName, size } = body
-    const user = (req as any).user as User
-    if (!user) {
-      throw new BadRequestException('User not found');
-    }
-
-    if (totalChunks !== 1) {
-      throw new BadRequestException('Total chunks must be 1');
-    }
-
-    if (uploadType === UploadType.MULTIPART_FILE) {
-      throw new BadRequestException('Invalid upload type. Only single file upload is supported.');
-    }
-
-    // Validate filename has proper extension
-    if (!fileName.includes('.')) {
-      throw new BadRequestException('Filename must include a file extension');
-    }
-
-    const extension = fileName.split('.').pop();
-    if (!extension || extension.length === 0) {
-      throw new BadRequestException('Invalid file. No extension found');
-    }
-
-    if (size <= 0) {
-      throw new BadRequestException('File size must be greater than 0');
-    }
-
-    return this.uploadService.createUploadRequest(body, user);
-  }
 
   @Post()
   @UseInterceptors(FilesInterceptor('file', 1, {
@@ -125,6 +93,45 @@ export class UploadController {
     });
 
     return receipt
+  }
+
+
+  @Post('cost')
+  getEstimate(@Body() body: EstimatesDto) {
+    return this.uploadService.getCostEstimate(body);
+  }
+
+  @Post('create')
+  createUploadRequest(@Body() body: CreateUploadRequestDto, @Req() req: Request) {
+    const { totalChunks, uploadType, fileName, size } = body
+    const user = (req as any).user as User
+    if (!user) {
+      throw new BadRequestException('User not found');
+    }
+
+    if (totalChunks !== 1) {
+      throw new BadRequestException('Total chunks must be 1');
+    }
+
+    if (uploadType === UploadType.MULTIPART_FILE) {
+      throw new BadRequestException('Invalid upload type. Only single file upload is supported.');
+    }
+
+    // Validate filename has proper extension
+    if (!fileName.includes('.')) {
+      throw new BadRequestException('Filename must include a file extension');
+    }
+
+    const extension = fileName.split('.').pop();
+    if (!extension || extension.length === 0) {
+      throw new BadRequestException('Invalid file. No extension found');
+    }
+
+    if (size <= 0) {
+      throw new BadRequestException('File size must be greater than 0');
+    }
+
+    return this.uploadService.createUploadRequest(body, user);
   }
 
   @Post('chunk')
@@ -198,5 +205,20 @@ export class UploadController {
     }
 
     return rest;
+  }
+
+  @Get('receipt')
+  async getReceipts(@Query('page') page: number, @Query('limit') limit: number) {
+    return this.uploadService.getReceipts({ page, perPage: limit });
+  }
+
+  @Get('receipt/:id')
+  async getReceipt(@Param('id') id: string) {
+    return this.uploadService.getReceiptById(id);
+  }
+
+  @Get(':id')
+  async getUploadRequest(@Param('id') id: string) {
+    return this.uploadService.getUploadRequest(id);
   }
 }
