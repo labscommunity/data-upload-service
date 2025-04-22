@@ -154,15 +154,25 @@ export class UploadController {
       throw new BadRequestException('Completed upload already exists with receipt id: ' + receipt.id);
     }
 
-    const verified = await this.uploadService.verifyPayment({
-      paymentTx: txnHash,
-      chainType: token.chainType,
-      network: token.network,
-      chainId: +token.chainId,
-      senderAddress: (req as any).user.walletAddress,
-      amount: paymentTransaction.amountInSubUnits,
-      tokenAddress: token.address
-    });
+    let verified = false;
+    let retries = 30;
+    while (!verified && retries > 0) {
+      verified = await this.uploadService.verifyPayment({
+        paymentTx: txnHash,
+        chainType: token.chainType,
+        network: token.network,
+        chainId: +token.chainId,
+        senderAddress: (req as any).user.walletAddress,
+        amount: paymentTransaction.amountInSubUnits,
+        tokenAddress: token.address
+      });
+      if (!verified) {
+        retries--;
+        if (retries > 0) {
+          await new Promise(resolve => setTimeout(resolve, 2000)); // Wait 2 second between retries
+        }
+      }
+    }
     if (!verified) {
       throw new BadRequestException('Payment verification failed. Invalid transaction hash or amount');
     }
