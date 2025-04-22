@@ -20,6 +20,7 @@ export default () => ({
   },
   arweave: {
     address: process.env.ARWEAVE_ADDRESS,
+    pk: process.env.ARWEAVE_PK,
   },
   solana: {
     address: process.env.SOLANA_ADDRESS,
@@ -34,6 +35,7 @@ export default () => ({
       addresses: {
         evm: process.env.FEE_ADDRESS_EVM,
         solana: process.env.FEE_ADDRESS_SOLANA,
+        arweave: process.env.FEE_ADDRESS_ARWEAVE,
       },
       feePercentage: process.env.FEE_PERCENTAGE,
     },

@@ -1,6 +1,7 @@
 import { BadRequestException } from '@nestjs/common';
 import { ChainType, Network } from '@prisma/client';
 import { Connection } from '@solana/web3.js';
+import Arweave from "arweave/node";
 import { ethers, Provider, Signer } from 'ethers';
 
 
@@ -57,11 +58,17 @@ export class Web3Provider {
      * @param chainType - The type of blockchain (EVM or SOLANA).
      * @param network - The network to connect to (MAINNET or TESTNET).
      */
-    public static getProvider(chainType: ChainType, network: Network, chainId: number): Provider | Connection {
+    public static getProvider(chainType: ChainType, network: Network, chainId: number): Provider | Connection | Arweave {
         if (chainType === ChainType.evm) {
             return this.getEvmProvider(chainId);
         } else if (chainType === ChainType.solana) {
             return this.getSolanaConnection(network);
+        } else if (chainType === ChainType.arweave) {
+            return Arweave.init({
+                host: 'arweave.net',
+                port: 443,
+                protocol: 'https',
+            });
         } else {
             throw new Error('Unsupported chain type');
         }
@@ -71,8 +78,8 @@ export class Web3Provider {
         if (chainType === ChainType.evm) {
             return new ethers.Wallet(privateKey, this.getEvmProvider(chainId));
         } else if (chainType === ChainType.solana) {
-           // TODO: Implement solana signer
-           throw new BadRequestException("Solana signer not implemented");
+            // TODO: Implement solana signer
+            throw new BadRequestException("Solana signer not implemented");
         } else {
             throw new Error('Unsupported chain type');
         }

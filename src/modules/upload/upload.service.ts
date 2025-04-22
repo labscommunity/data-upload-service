@@ -2,6 +2,8 @@ import { BadRequestException, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { ChainType, Network, ReceiptStatus, TokenTicker, TransactionStatus, UploadStatus, } from '@prisma/client';
 import { Connection, ParsedInstruction } from '@solana/web3.js';
+import Arweave from 'arweave/node/common';
+import axios from 'axios';
 import BigNumber from 'bignumber.js';
 import { Contract, getAddress, Interface, Provider } from 'ethers';
 import * as fs from 'fs';
@@ -110,8 +112,8 @@ export class UploadService {
       data: {
         userWalletAddress: user.walletAddress,
         tokenId: validToken.id,
-        amount: costInToken.amount,
-        amountInSubUnits: costInToken.amountInSubUnits,
+        amount: typeof costInToken.amount === 'string' ? costInToken.amount : BigNumber(costInToken.amount).toFixed(),
+        amountInSubUnits: typeof costInToken.amountInSubUnits === 'string' ? costInToken.amountInSubUnits : BigNumber(costInToken.amountInSubUnits).toString(),
       }
     })
 
@@ -122,7 +124,7 @@ export class UploadService {
         fileName: fileName,
         size: size,
         uploadType: uploadType,
-        uploadEstimate: costInToken.amount,
+        uploadEstimate: typeof costInToken.amount === 'string' ? costInToken.amount : BigNumber(costInToken.amount).toFixed(),
         uploadEstimateUSD: BigNumber(costEstimate.usd).toFixed(),
         mimeType: mimeType,
         totalChunks: totalChunks,
@@ -375,6 +377,28 @@ export class UploadService {
       }
     }
 
+    if (chainType === ChainType.arweave) {
+      //
+      console.log({ paymentTx })
+      const tx = await axios.post('https://arweave.net/graphql', {
+        query: `query{ transaction(id:"${paymentTx}"){ id, quantity{ winston ar }, owner{ address }, recipient } }`,
+      });
+      const data = tx.data;
+      const transaction = data.data.transaction;
+      if (!transaction) {
+        return false;
+      }
+      console.log({ transaction })
+
+      const { quantity, owner, recipient } = transaction;
+      const quantityInWinston = quantity.winston;
+      const ownerAddress = owner.address;
+      const recipientAddress = recipient;
+
+      const valid = BigInt(quantityInWinston) === BigInt(amount) && recipientAddress === systemAddress && ownerAddress === senderAddress;
+      return valid;
+    }
+
     return false;
   }
 
@@ -548,8 +572,29 @@ export class UploadService {
       throw new BadRequestException("Solana fee debit not implemented");
     }
 
+    if (ChainType.arweave === token.chainType) {
+      const jwk = JSON.parse(systemPrivateKey)
 
+      const arweave = Arweave.init({
+        host: 'arweave.net',
+        port: 443,
+        protocol: 'https',
+      })
+      console.log({ feeAmount })
+      const txn = await arweave.createTransaction({ quantity: feeAmount, target: feeAddress })
+      await arweave.transactions.sign(txn, jwk)
+      const res = await arweave.transactions.post(txn)
+      console.log({ res })
 
+      if (res.status !== 200) {
+        throw new BadRequestException("Fee transaction failed");
+      }
+
+      await this.databaseService.feeTransaction.update({
+        where: { id: feeTransactionId },
+        data: { status: TransactionStatus.SUCCEEDED, transactionHash: txn.id }
+      });
+    }
   }
 
   private async validateToken(chainType: ChainType, tokenTicker: TokenTicker, chainId: number, network: Network) {

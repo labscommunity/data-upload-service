@@ -168,9 +168,33 @@ export class AuthService {
       throw new BadRequestException('Invalid Arweave signature: nonce missing or mismatch');
     }
 
-    const verified = this.getArweave().crypto.verify(publicKey, Uint8Array.from(Buffer.from(signedMessage)), Uint8Array.from(Buffer.from(signature)));
+    const publicJWK = {
+      e: "AQAB",
+      ext: true,
+      kty: "RSA",
+      n: publicKey
+    };
 
-    if (!verified) {
+    const verificationKey = await crypto.subtle.importKey(
+      "jwk",
+      publicJWK,
+      {
+        name: "RSA-PSS",
+        hash: "SHA-256"
+      },
+      false,
+      ["verify"]
+    );
+
+    const hash = await crypto.subtle.digest("SHA-256", Buffer.from(signedMessage));
+    const isValidSignature = await crypto.subtle.verify(
+      { name: "RSA-PSS", saltLength: 32 },
+      verificationKey,
+      Buffer.from(signature, 'base64'),
+      hash
+    );
+
+    if (!isValidSignature) {
       throw new BadRequestException('Invalid Arweave signature: verification failed');
     }
   }
