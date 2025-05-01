@@ -183,6 +183,7 @@ enum ChainType {
   evm
   solana
   arweave
+  cosmos
 }
 
 enum Network {

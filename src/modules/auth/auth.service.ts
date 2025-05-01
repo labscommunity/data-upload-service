@@ -1,21 +1,27 @@
+import {
+  makeSignDoc as makeSignDocAmino,
+  serializeSignDoc,
+} from '@cosmjs/amino';
+import { Secp256k1, Secp256k1Signature } from '@cosmjs/crypto';
 import { BadRequestException, Injectable, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
+import { sha256 } from "@noble/hashes/sha2"
 import { ChainType, User } from '@prisma/client';
 import { PublicKey } from '@solana/web3.js';
 import Arweave from 'arweave/node';
 import * as crypto from 'crypto';
-import { ethers } from 'ethers';
+import { decodeBase64, ethers, } from 'ethers';
 import * as nacl from 'tweetnacl';
 
 import { UserService } from '../user/user.service';
 import { VerifyAuthDto } from './dto/verify-auth.dto';
-
 @Injectable()
 export class AuthService {
   private VERIFY_MAP = {
     [ChainType.evm]: this.verifyEvmSignature,
     [ChainType.solana]: this.verifySolanaSignature,
     [ChainType.arweave]: this.verifyArweaveSignature,
+    [ChainType.cosmos]: this.cosmosVerifySignature,
   }
 
   constructor(
@@ -27,12 +33,14 @@ export class AuthService {
     this.verifyEvmSignature = this.verifyEvmSignature.bind(this);
     this.verifySolanaSignature = this.verifySolanaSignature.bind(this);
     this.verifyArweaveSignature = this.verifyArweaveSignature.bind(this);
+    this.cosmosVerifySignature = this.cosmosVerifySignature.bind(this);
 
     this.VERIFY_MAP = {
       [ChainType.evm]: this.verifyEvmSignature,
       [ChainType.solana]: this.verifySolanaSignature,
       [ChainType.arweave]: this.verifyArweaveSignature,
-    };
+      [ChainType.cosmos]: this.cosmosVerifySignature,
+    }
   }
 
   async generateNonce(user: User): Promise<string> {
@@ -196,6 +204,49 @@ export class AuthService {
 
     if (!isValidSignature) {
       throw new BadRequestException('Invalid Arweave signature: verification failed');
+    }
+  }
+
+  /**
+* Arweave signature verification
+*/
+  private async cosmosVerifySignature(user: User, signedMessage: string, signature: string, publicKey?: string) {
+    if (!publicKey) {
+      throw new BadRequestException('Invalid Cosmos public key');
+    }
+
+    const nonce = this.extractNonce(signedMessage);
+    if (!nonce || nonce !== user.nonce) {
+      throw new BadRequestException('Invalid Cosmos signature: nonce missing or mismatch');
+    }
+
+    const fixed = decodeBase64(signature);
+    const cSig = Secp256k1Signature.fromFixedLength(fixed);
+    const ADR36 = {
+      type: 'sign/MsgSignData',
+      memo: '',
+      accountNumber: 0,
+      sequence: 0,
+      chainId: '',
+      fee: { gas: '0', amount: [] },
+    };
+    const msgs = [{ type: ADR36.type, value: { signer: user.walletAddress, data: signedMessage } }];
+    const signBytes = serializeSignDoc(
+      makeSignDocAmino(
+        msgs,
+        ADR36.fee,
+        ADR36.chainId,
+        ADR36.memo,
+        ADR36.accountNumber,
+        ADR36.sequence,
+      ),
+    );
+    const hash = sha256(signBytes)
+    console.log({ hash, length: hash.length });
+    const pkbytes = decodeBase64(publicKey);
+    const ok = await Secp256k1.verifySignature(cSig, hash, pkbytes);
+    if (!ok) {
+      throw new BadRequestException('Invalid Cosmos signature: verification failed');
     }
   }
 
