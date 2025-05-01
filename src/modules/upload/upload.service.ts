@@ -1,3 +1,4 @@
+import { IndexedTx, StargateClient } from '@cosmjs/stargate';
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { ChainType, Network, ReceiptStatus, TokenTicker, TransactionStatus, UploadStatus, } from '@prisma/client';
@@ -57,7 +58,12 @@ export class UploadService {
     const costInToken = await this.priceFeedService.convertToTokenAmount(costInUSD, estimatesDto.tokenTicker, token.decimals);
 
     const ticker = estimatesDto.tokenTicker.toLowerCase();
-    const chainType = estimatesDto.chainType.toLowerCase();
+    let chainType = estimatesDto.chainType.toLowerCase();
+
+    if (chainType === ChainType.cosmos) {
+      chainType = 'cosmos.noble';
+    }
+
     const payAddress = this.configService.get(`${chainType}.address`);
 
     if (!payAddress) {
@@ -231,19 +237,21 @@ export class UploadService {
     chainId,
     senderAddress,
     amount,
-    network
   }: {
     tokenAddress: string;
     paymentTx: string;
     chainType: ChainType;
-    network: Network;
     chainId: number;
     senderAddress: string;
     amount: string;
   }) {
 
-    const provider = Web3Provider.getProvider(chainType, network, chainId);
-    const systemAddress = this.configService.get(`${chainType}.address`);
+    const provider = await Web3Provider.getProvider(chainType, chainId);
+    let _chainType = chainType.toLowerCase();
+    if (chainType === ChainType.cosmos) {
+      _chainType = 'cosmos.noble';
+    }
+    const systemAddress = this.configService.get(`${_chainType}.address`);
 
     if (!systemAddress) {
       throw new BadRequestException(`System address not found for chain type ${chainType}`);
@@ -399,6 +407,51 @@ export class UploadService {
       return valid;
     }
 
+    if (chainType === ChainType.cosmos) {
+      // 1) connect to the chain
+      const client = (await Web3Provider.getProvider(
+        chainType,
+        chainId
+      )) as StargateClient;
+
+      // 3) fetch the transaction
+      let txResponse: IndexedTx | null;
+      try {
+        txResponse = await client.getTx(paymentTx);
+      } catch (err: any) {
+        throw new BadRequestException(`Cosmos tx not found: ${paymentTx}`);
+      }
+      if (!txResponse) {
+        throw new BadRequestException(`Cosmos tx not found: ${paymentTx}`);
+      }
+      if (txResponse.code !== 0) {
+        throw new BadRequestException('Transaction failed on-chain');
+      }
+
+      // 4) scan for a transfer event matching sender→system for the correct denom+amount
+      const denom = tokenAddress;
+      for (const evt of txResponse.events) {
+        console.log(JSON.stringify(evt, null, 2))
+        if (evt.type !== 'transfer') continue;
+        const attrs = evt.attributes.reduce<Record<string, string>>((acc, { key, value }) => {
+          acc[key] = value;
+          return acc;
+        }, {});
+
+        if (
+          attrs.sender === senderAddress &&
+          attrs.recipient === systemAddress &&
+          attrs.amount?.endsWith(denom)
+        ) {
+          const valueOnly = attrs.amount.slice(0, -denom.length);
+          console.log({ valueOnly, amount })
+          if (valueOnly === amount) {
+            return true;
+          }
+        }
+      }
+    }
+
     return false;
   }
 
@@ -533,8 +586,12 @@ export class UploadService {
       throw new BadRequestException("Token not found");
     }
 
-    const systemAddress = this.configService.get(`${token.chainType}.address`);
-    const systemPrivateKey = this.configService.get(`${token.chainType}.pk`);
+    let _chainType = token.chainType.toLowerCase();
+    if (token.chainType === ChainType.cosmos) {
+      _chainType = 'cosmos.noble';
+    }
+    const systemAddress = this.configService.get(`${_chainType}.address`);
+    const systemPrivateKey = this.configService.get(`${_chainType}.pk`);
     const feeAddress = this.configService.get(`admin.feeConfig.addresses.${token.chainType}`);
 
     if (!systemAddress || !feeAddress) {
@@ -547,11 +604,11 @@ export class UploadService {
       const ERC20_ABI = [
         "function transfer(address recipient, uint256 amount) external returns (bool)"
       ];
-      const signer = Web3Provider.getSigner(token.chainType, token.chainId, systemPrivateKey);
-      const tokenContract = new Contract(token.address, ERC20_ABI, signer);
+      const signer = await Web3Provider.getSigner(token.chainType, token.chainId, systemPrivateKey);
+      const tokenContract = new Contract(token.address, ERC20_ABI, signer as any);
       const feeAmountBN = BigInt(feeAmount);
 
-      const contractSigner = tokenContract.connect(signer) as any
+      const contractSigner = tokenContract.connect(signer as any) as any
 
       const tx = await contractSigner.transfer(feeAddress, feeAmountBN)
 
@@ -594,6 +651,12 @@ export class UploadService {
         where: { id: feeTransactionId },
         data: { status: TransactionStatus.SUCCEEDED, transactionHash: txn.id }
       });
+    }
+
+    if (ChainType.cosmos === token.chainType) {
+      //
+      console.log("not implemented")
+      // throw new BadRequestException("Cosmos fee debit not implemented");
     }
   }
 

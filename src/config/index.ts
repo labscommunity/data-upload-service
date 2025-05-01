@@ -30,12 +30,21 @@ export default () => ({
     address: process.env.EVM_ADDRESS,
     pk: process.env.EVM_PK,
   },
+  cosmos: {
+    noble: {
+      address: process.env.COSMOS_NOBLE_ADDRESS,
+      pk: process.env.COSMOS_NOBLE_PK,
+    },
+  },
   admin: {
     feeConfig: {
       addresses: {
         evm: process.env.FEE_ADDRESS_EVM,
         solana: process.env.FEE_ADDRESS_SOLANA,
         arweave: process.env.FEE_ADDRESS_ARWEAVE,
+        cosmos: {
+          noble: process.env.FEE_ADDRESS_COSMOS_NOBLE,
+        },
       },
       feePercentage: process.env.FEE_PERCENTAGE,
     },

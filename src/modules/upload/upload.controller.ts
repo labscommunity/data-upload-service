@@ -67,7 +67,6 @@ export class UploadController {
     const verified = await this.uploadService.verifyPayment({
       paymentTx: body.transactionId,
       chainType: token.chainType,
-      network: token.network,
       chainId: +token.chainId,
       senderAddress: (req as any).user.walletAddress,
       amount: paymentTransaction.amountInSubUnits,
@@ -160,7 +159,6 @@ export class UploadController {
       verified = await this.uploadService.verifyPayment({
         paymentTx: txnHash,
         chainType: token.chainType,
-        network: token.network,
         chainId: +token.chainId,
         senderAddress: (req as any).user.walletAddress,
         amount: paymentTransaction.amountInSubUnits,
