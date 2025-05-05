@@ -44,3 +44,6 @@ pnpm db:studio
 
 ## Running the service in development mode
 
+## Other Notes
+
+* **Terms of Service and Privacy Policy:** The link to the Terms of Service and Privacy Policy for the Arweave Data Storage SDK [Tos and Privacy Policy](https://github.com/labscommunity/arweave-storage-sdk/blob/main/Arweave%20Data%20Storage%20SDK%20-%20ToS%20and%20Privacy%20Policy.pdf)
